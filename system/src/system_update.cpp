@@ -228,24 +228,12 @@ int Spark_Prepare_For_Firmware_Update(FileTransfer::Descriptor& file, uint32_t f
         // only check address
     }
     else {
-        uint32_t start = HAL_Timer_Milliseconds();
-        system_set_flag(SYSTEM_FLAG_OTA_UPDATE_PENDING, 1, nullptr);
-
-        volatile bool flag = false;
-        system_notify_event(firmware_update_pending, 0, nullptr, set_flag, (void*)&flag);
-
-        System.waitCondition([&flag]{return flag;}, timeRemaining(start, 30000));
-
-        system_set_flag(SYSTEM_FLAG_OTA_UPDATE_PENDING, 0, nullptr);
-        	if (System.updatesEnabled())		// application event is handled asynchronously
+        if (System.updatesEnabled())		// application event is handled asynchronously
         {
             RGB.control(true);
             // Get base color used for the update process indication
             const LEDStatusData* status = led_signal_status(LED_SIGNAL_FIRMWARE_UPDATE, nullptr);
             RGB.color(status ? status->color : RGB_COLOR_MAGENTA);
-            SPARK_FLASH_UPDATE = 1;
-            TimingFlashUpdateTimeout = 0;
-            system_notify_event(firmware_update, firmware_update_begin, &file);
             HAL_FLASH_Begin(file.file_address, file.file_length, NULL);
         }
         else
@@ -312,23 +300,14 @@ void system_shutdown_if_needed()
 int Spark_Finish_Firmware_Update(FileTransfer::Descriptor& file, uint32_t flags, void* module)
 {
     using namespace particle::protocol;
-    SPARK_FLASH_UPDATE = 0;
-    TimingFlashUpdateTimeout = 0;
-    //DEBUG("update finished flags=%d store=%d", flags, file.store);
     int res = 1;
 
     hal_module_t mod;
-
-    if ((flags & (UpdateFlag::VALIDATE_ONLY | UpdateFlag::SUCCESS)) == (UpdateFlag::VALIDATE_ONLY | UpdateFlag::SUCCESS)) {
-        res = HAL_FLASH_OTA_Validate(module ? (hal_module_t*)module : &mod, true, (module_validation_flags_t)(MODULE_VALIDATION_INTEGRITY | MODULE_VALIDATION_DEPENDENCIES_FULL), NULL);
-        return res;
-    }
 
     if (flags & UpdateFlag::SUCCESS) {    // update successful
         if (file.store==FileTransfer::Store::FIRMWARE)
         {
             hal_update_complete_t result = HAL_FLASH_End(module ? (hal_module_t*)module : &mod);
-            system_notify_event(firmware_update, result!=HAL_UPDATE_ERROR ? firmware_update_complete : firmware_update_failed, &file);
             res = (result == HAL_UPDATE_ERROR);
 
             // always restart for now
@@ -338,10 +317,6 @@ int Spark_Finish_Firmware_Update(FileTransfer::Descriptor& file, uint32_t flags,
             }
         }
     }
-    else
-    {
-        system_notify_event(firmware_update, firmware_update_failed, &file);
-    }
 
     RGB.control(false);
     return res;
@@ -349,9 +324,7 @@ int Spark_Finish_Firmware_Update(FileTransfer::Descriptor& file, uint32_t flags,
 
 int Spark_Save_Firmware_Chunk(FileTransfer::Descriptor& file, const uint8_t* chunk, void* reserved)
 {
-    TimingFlashUpdateTimeout = 0;
     int result = -1;
-    system_notify_event(firmware_update, firmware_update_progress, &file);
     if (file.store==FileTransfer::Store::FIRMWARE)
     {
         result = HAL_FLASH_Update(chunk, file.chunk_address, file.chunk_size, NULL);
