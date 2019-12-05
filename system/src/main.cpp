@@ -87,6 +87,10 @@
 #include <openthread/platform/settings.h>
 #endif
 
+#if HAL_PLATFORM_RADIO_STACK
+#include "radio_common.h"
+#endif
+
 #if PLATFORM_ID == 3
 // Application loop uses std::this_thread::sleep_for() to workaround 100% CPU usage on the GCC platform
 #include <thread>
@@ -149,7 +153,7 @@ static volatile uint8_t button_current_clicks = 0;
 /* FIXME */
 static volatile bool button_cleared_credentials = false;
 
-#if Wiring_SetupButtonUX
+#if HAL_PLATFORM_SETUP_BUTTON_UX
 
 namespace {
 
@@ -270,7 +274,7 @@ void system_handle_button_clicks(bool isIsr)
     button_final_clicks = 0;
 }
 
-#endif // #if Wiring_SetupButtonUX
+#endif // #if HAL_PLATFORM_SETUP_BUTTON_UX
 
 void reset_button_click()
 {
@@ -280,7 +284,7 @@ void reset_button_click()
     if (clicks > 0) {
         system_notify_event(button_final_click, clicks, nullptr, nullptr, nullptr, NOTIFY_SYNCHRONOUSLY);
         button_final_clicks = clicks;
-#if Wiring_SetupButtonUX
+#if HAL_PLATFORM_SETUP_BUTTON_UX
         // Certain numbers of clicks can be processed directly in ISR
         system_handle_button_clicks(HAL_IsISR());
 #endif
@@ -736,6 +740,10 @@ void app_setup_and_loop(void)
             LOG(TRACE, "Last reset reason: %d (data: 0x%02x)", reason, (unsigned)data); // TODO: Use LOG_ATTR()
         }
     }
+
+#if HAL_PLATFORM_RADIO_STACK
+    initRadioAntenna();
+#endif
 
 #if HAL_PLATFORM_BLE
     // FIXME: Move BLE and Thread initialization to an appropriate place
